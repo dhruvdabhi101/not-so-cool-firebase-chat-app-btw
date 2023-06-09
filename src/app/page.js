@@ -1,95 +1,106 @@
-import Image from 'next/image'
+'use client'
 import styles from './page.module.css'
+import { initializeApp } from "firebase/app"
+import "firebase/firestore"
+import "firebase/auth"
+import {Image} from 'next/image'
+
+import { getAuth, signInWithPopup, GoogleAuthProvider } from "firebase/auth"
+import {useAuthState} from "react-firebase-hooks/auth"
+import {useCollectionData} from "react-firebase-hooks/firestore"
+import { collection, getFirestore, query, orderBy, serverTimestamp, Firestore, addDoc } from 'firebase/firestore'
+import {useState} from "react";
+
+const app = initializeApp({
+    apiKey: process.env.API_KEY,
+    authDomain: process.env.AUTH_DOMAIN,
+    projectId: process.env.PROJECT_ID,
+    storageBucket: process.env.STOREAGE_BUCKET,
+    messagingSenderId: process.env.MESSAGEG_SENDER_ID,
+    appId: process.env.APP_ID,
+    measurementId: process.env.MEASUREMENT_ID
+})
+const auth = getAuth()
+const firestore = getFirestore(app)
+
 
 export default function Home() {
-  return (
-    <main className={styles.main}>
-      <div className={styles.description}>
-        <p>
-          Get started by editing&nbsp;
-          <code className={styles.code}>src/app/page.js</code>
-        </p>
+
+    const [user] = useAuthState(auth)
+
+    return (
+        <main className='App'>
+        <header>
+        </header>
+
+        <section>
+            {user ? <ChatRoom /> : <SignIn />}
+        </section>
+        </main>
+    )
+}
+
+function SignIn(){
+
+    async function useSignInWithGoogle(){
+        const provider = new GoogleAuthProvider()
+        await signInWithPopup(auth, provider)
+    }
+
+    return (
+        <button className='signin' onClick={useSignInWithGoogle}> Sign in with Google </button>
+    )
+}
+function ChatRoom() {
+
+    const messageRef = collection(firestore, 'messages');
+    const another_query = query(messageRef, orderBy('createdAt'));
+
+    const [message] = useCollectionData(another_query, {idField: 'id'});
+    const [formValue, setFormValue] = useState('')
+
+    const sendMessage = async (e) => {
+        e.preventDefault()
+        const {uid, photoURL } = auth.currentUser
+        await addDoc(messageRef, {
+            text: formValue,
+            createdAt: serverTimestamp(),
+            uid,
+            photoURL
+        })
+
+        setFormValue('')
+    }
+
+
+
+    return (
         <div>
-          <a
-            href="https://vercel.com?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            By{' '}
-            <Image
-              src="/vercel.svg"
-              alt="Vercel Logo"
-              className={styles.vercelLogo}
-              width={100}
-              height={24}
-              priority
-            />
-          </a>
+            <div>
+                {message && message.map(msg => <ChatMessage key={msg.id} message={msg} />)}
+            </div>
+            <form onSubmit={sendMessage}>
+                <input value={formValue} onChange={(e) => setFormValue(e.target.value)} />
+                <button type="submit">Send</button>
+            </form>
         </div>
-      </div>
+    )
+}
 
-      <div className={styles.center}>
-        <Image
-          className={styles.logo}
-          src="/next.svg"
-          alt="Next.js Logo"
-          width={180}
-          height={37}
-          priority
-        />
-      </div>
+function SignOut() {
+    return auth.currentUser && (
+        <button onClick={() => auth.signOut()}>Sign Out</button>
+    )
+}
 
-      <div className={styles.grid}>
-        <a
-          href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className={styles.card}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2>
-            Docs <span>-&gt;</span>
-          </h2>
-          <p>Find in-depth information about Next.js features and API.</p>
-        </a>
+function ChatMessage(props) {
+    const {text, uid, photoURL } = props.message
 
-        <a
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className={styles.card}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2>
-            Learn <span>-&gt;</span>
-          </h2>
-          <p>Learn about Next.js in an interactive course with&nbsp;quizzes!</p>
-        </a>
-
-        <a
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className={styles.card}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2>
-            Templates <span>-&gt;</span>
-          </h2>
-          <p>Explore the Next.js 13 playground.</p>
-        </a>
-
-        <a
-          href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className={styles.card}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2>
-            Deploy <span>-&gt;</span>
-          </h2>
-          <p>
-            Instantly deploy your Next.js site to a shareable URL with Vercel.
-          </p>
-        </a>
-      </div>
-    </main>
-  )
+    const messageClass = uid === auth.currentUser.uid ? 'sent' : 'received'
+    return (
+        <div className={`message ${messageClass}`}>
+        <img src={photoURL} />
+        <p>{text}</p>
+        </div>
+    )
 }
